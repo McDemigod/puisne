@@ -1,0 +1,141 @@
+PUISNE - Portable UnINtruSive Executor
+
+Package an executable & resources into a single file.
+
+Description
+    PUISNE is a combination executable stub & zip compressed archive in a single
+    file. When executed, it will extract the archive content & execute a single
+    "entrypoint" file contained therein.
+
+    PUISNE aims to be "unintrusive"; it can be used as a drop-in replacement for
+    the original executable; it will not typically intercept arguments or input
+    intended for the packaged executable. Where possible, it aims to avoid
+    littering the containing directory with archive contents.
+
+Packages
+    At a minimum, the archive should contain a folder with your application's
+    name & a `.app` suffix (similar to MacOS application bundles). That folder
+    should contain a file with the same name without the `.app` suffixed. That
+    file will be the "entrypoint" executed by PUISNE. Note a blank application
+    name, ie. a top-level folder named `.app/` is invalid & will cause an error.
+
+Arguments
+    Arguments are generally passed directly to the packaged executable. CLI
+    arguments meant for PUISNE specifically must be specified explicitly by
+    a leading `--`, eg.
+
+        $ ./my_puisne.com -- -d directory
+
+    A subsequent `--` ends PUISNE argument parsing; the remainder is passed to
+    the packaged executable, eg.
+
+        $ ./my_puisne.com -- -d directory -- --this=one_is_for_the_executable
+
+    Later arguments take precedence over earlier ones (& see ".args" below).
+
+    Nb. in the explanations below "working environment" refers to the directory
+    containing the PUISNE, as determined by invocation, ie. `argv[0]`.
+
+    -u unzip_option
+        What files to extract from the archive. Available options are "all",
+        "none", "new" (do not overwrite anything), "existing" (overwrite
+        destination files but create none), "update" (create new files but
+        overwrite files only if newer in the archive), & "freshen" (overwrite
+        files newer in the archive but create none). Defaults to "update".
+    -d destination
+        Directory where to extract package content. Expands a leading `~` to the
+        user's home directory if the shell has not already. Default differs
+        between `-m` & `-n` flags.
+    -m
+        Mount extracted files [ over | under ] the working environment.
+        This is only available with Linux kernel ≥ 5.12.0, where it is the
+        default behavior. If not set with `-d`, defaults `destination` to
+        `.puisne/app_name.app` in the working environment.
+    -n
+        No mount / not clean / naïve; simply extracts files & executes. This is
+        the default outside of environments where `-m` is available. Sets
+        destination default to the working environment.
+    -o overlay_option
+        How to overlay destination. This effects where writes persist & what
+        files the app "sees" if paths clash between the destination and working
+        environment. "over", the default, attempts to isolate the app; writes
+        persist to the destination & the app will see only working environment
+        files that do not clash with the destination. "under" will prefer files
+        in the working environment, & will write there as well; this option is
+        appropriate for eg. analysis notebooks, which write intermediate files,
+        figures, &c. into the working environment that the user will want
+        readily available. Nb. this typically applies to files written by the
+        app, but not its own files, which will be copied-on-write; use `-n` to
+        persist these unequivocably.
+    -w working_directory
+        Working directory for the overlay mount; should be empty & on the same
+        volume as the PUISNE. Defaults to a randomly generated temporary
+        directory beginning with "puisne.".
+    -h
+        Print this help & exit.
+
+.args
+    A file named `.args` may be included at the top-level of the `zip`ped
+    package. If found, arguments & options for PUISNE will be parsed from there
+    (one per line). In general, this only occurs if no arguments are passed from
+    the CLI. If, however, `.args` includes the special argument `...`, it is
+    replaced with command-line arguments. Therefore, to set user-overridable
+    defaults include them before `...` in `.args`; include the argument after
+    `...` to force the argument, such that users cannot override it.
+    NB. users are always free to update the `.args` itself. Also note, package
+    arguments are split from PUISNE arguments before this occurs, so you cannot
+    use `--` to specify default / force arguments to the packaged executable.
+
+Examples
+    Make a package; `my_app.app/my_app` exists & is executable:
+
+        $ zip -r -D -g my_app.com my_app.app
+
+    The example excludes explicit entries for directories with `-D`;  PUISNE
+    will still make them with default flags, as needed. Furthermore, it "grows"
+    the archive with `-g`, ie. it appends to the end of the existing content,
+    rather than recreating the archive anew. This is necessary to maintain
+    functionality in Windows, especially for small packages.
+
+    Run a package, passing it `-a`:
+
+        $ ./my_app.com -a
+
+    Extract the package to a non-default directory, run it with `-a` passed:
+
+        $ ./my_app.com -- -d extract/somewhere/else -- -a
+
+    If the executable uses `--` to stop parsing arguments & pass those to some
+    other application, and you have no other arguments to pass to the package,
+    you need three `--`s in total so PUISNE does not intercept instead:
+
+        $ ./my_puisne.com -- -- -- --internal_arg=too/much/indirection/stinks
+
+Notes
+    Additional archive contents
+        Beyond the archive content already described, this help file is found at
+        `puisne/help.txt` but should be left in place as it will be displayed
+        either with the `-h` argument or if no package is found; generally users
+        don't even need to know this is a PUISNE package & this can be left
+        as-is.
+        A folder containing timezone information is found at
+        `usr/share/zoneinfo/` & is necessary for `-u freshen` or `-u update` to
+        properly interpret timestamp.
+        Any additional content found, ie. any other files or folders in the top
+        level or multiple `.app` folders, are invalid & will cause an error.
+        TARBOMB💣BAD
+
+    Puisne [ pyoo-nee ]
+        adjective
+            Law. younger; inferior in rank; junior, as in appointment.
+        noun
+            an associate judge as distinguished from a chief justice.
+
+        Yea, yea... S↔N. Hush.
+
+See also
+    zip(1), namespaces(7), mount(2), execv(3)
+    Info-ZIP
+        http://infozip.sourceforge.net
+    Cosmopolitan Libc
+        https://github.com/jart/cosmopolitan
